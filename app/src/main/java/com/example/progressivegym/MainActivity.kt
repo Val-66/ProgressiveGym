@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -88,11 +89,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 import java.util.Calendar
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Switch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.draw.clip
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -539,17 +544,18 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: WorkoutViewModel) {
-    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+    val tabs = listOf("Тренировки", "Статистика")
+    val pagerState = rememberPagerState(initialPage = 0) { tabs.size }
+    val coroutineScope = rememberCoroutineScope()
     var showReportDialog by rememberSaveable { mutableStateOf(false) }
     val data by viewModel.data.collectAsState()
-    val tabs = listOf("Тренировки", "Статистика")
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = "Прогрессии Тренировок",
+                        text = "Training app",
                         fontWeight = FontWeight.Bold
                     )
                 },
@@ -575,27 +581,38 @@ fun MainScreen(viewModel: WorkoutViewModel) {
                 .padding(innerPadding)
         ) {
             TabRow(
-                selectedTabIndex = selectedTabIndex,
+                selectedTabIndex = pagerState.currentPage,
                 containerColor = Color(0xFF1E1E1E),
                 contentColor = Color.White
             ) {
                 tabs.forEachIndexed { index, title ->
                     Tab(
-                        selected = selectedTabIndex == index,
-                        onClick = { selectedTabIndex = index },
+                        selected = pagerState.currentPage == index,
+                        onClick = {
+                            coroutineScope.launch {
+                                pagerState.animateScrollToPage(index)
+                            }
+                        },
                         text = {
                             Text(
                                 title,
-                                fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal
+                                fontWeight = if (pagerState.currentPage == index) FontWeight.Bold else FontWeight.Normal
                             )
                         }
                     )
                 }
             }
 
-            when (selectedTabIndex) {
-                0 -> WorkoutTab(viewModel = viewModel)
-                1 -> StatsTab(viewModel = viewModel)
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) { page ->
+                when (page) {
+                    0 -> WorkoutTab(viewModel = viewModel)
+                    1 -> StatsTab(viewModel = viewModel)
+                }
             }
         }
     }
@@ -623,6 +640,7 @@ fun WorkoutTab(viewModel: WorkoutViewModel) {
 
     var showExerciseDialog by rememberSaveable { mutableStateOf(false) }
     var editingExerciseIndex by rememberSaveable { mutableStateOf<Int?>(null) }
+    var exerciseToDeleteIndex by rememberSaveable { mutableStateOf<Int?>(null) }
 
     var activeFactsExerciseIndex by rememberSaveable { mutableStateOf<Int?>(null) }
 
@@ -633,7 +651,7 @@ fun WorkoutTab(viewModel: WorkoutViewModel) {
             .fillMaxSize()
             .padding(12.dp)
     ) {
-        // Dropdown Selectors Row
+        // Selectors Row
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -666,29 +684,23 @@ fun WorkoutTab(viewModel: WorkoutViewModel) {
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Week Dropdown
-            var weekMenuExpanded by remember { mutableStateOf(false) }
-            Box(modifier = Modifier.weight(0.8f)) {
-                OutlinedButton(
-                    onClick = { weekMenuExpanded = true },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(text = selectedWeek, fontSize = 13.sp)
-                }
-                DropdownMenu(
-                    expanded = weekMenuExpanded,
-                    onDismissRequest = { weekMenuExpanded = false }
-                ) {
-                    viewModel.weeks.forEach { week ->
-                        DropdownMenuItem(
-                            text = { Text(week) },
-                            onClick = {
-                                viewModel.selectWeek(week)
-                                weekMenuExpanded = false
-                            }
-                        )
-                    }
-                }
+            // Week Toggle Button (A <-> B)
+            Button(
+                onClick = {
+                    val nextWeek = if (selectedWeek == "Week A") "Week B" else "Week A"
+                    viewModel.selectWeek(nextWeek)
+                },
+                modifier = Modifier.weight(0.8f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF2C2C2C),
+                    contentColor = Color(0xFF00E5FF)
+                )
+            ) {
+                Text(
+                    text = selectedWeek,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
 
@@ -701,7 +713,7 @@ fun WorkoutTab(viewModel: WorkoutViewModel) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "План упражнений",
+                text = "Exercises",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -738,7 +750,10 @@ fun WorkoutTab(viewModel: WorkoutViewModel) {
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                itemsIndexed(currentExercises) { index, exercise ->
+                itemsIndexed(
+                    items = currentExercises,
+                    key = { index, exercise -> "${exercise.name}_$index" }
+                ) { index, exercise ->
                     ExerciseCard(
                         exercise = exercise,
                         number = index + 1,
@@ -755,7 +770,7 @@ fun WorkoutTab(viewModel: WorkoutViewModel) {
                             showExerciseDialog = true
                         },
                         onDelete = {
-                            viewModel.deleteExercise(selectedDay, selectedWeek, index)
+                            exerciseToDeleteIndex = index
                         },
                         onOpenFacts = {
                             activeFactsExerciseIndex = index
@@ -764,6 +779,33 @@ fun WorkoutTab(viewModel: WorkoutViewModel) {
                 }
             }
         }
+    }
+
+    // Exercise Delete Confirmation Dialog
+    exerciseToDeleteIndex?.let { idx ->
+        val ex = currentExercises.getOrNull(idx)
+        AlertDialog(
+            onDismissRequest = { exerciseToDeleteIndex = null },
+            title = { Text("Удалить упражнение?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Вы уверены, что хотите удалить упражнение \"${ex?.name ?: ""}\"? Все его данные и история будут удалены.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteExercise(selectedDay, selectedWeek, idx)
+                        exerciseToDeleteIndex = null
+                    }
+                ) {
+                    Text("Удалить", color = Color(0xFFEF5350), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { exerciseToDeleteIndex = null }) {
+                    Text("Отмена")
+                }
+            }
+        )
     }
 
     // Exercise Dialog (Add/Edit)
@@ -912,10 +954,12 @@ fun ExerciseCard(
                     color = Color.DarkGray
                 )
             } else {
-                val parsed = facts.map { FactParser.parse(it) }
-                val maxScore = parsed.mapNotNull { it?.peak }.maxOrNull() ?: 0f
-                val prevPeaks = parsed.indices.map { i ->
-                    parsed.take(i).mapNotNull { it?.peak }.lastOrNull()
+                val parsed = remember(facts) { facts.map { FactParser.parse(it) } }
+                val maxScore = remember(parsed) { parsed.mapNotNull { it?.peak }.maxOrNull() ?: 0f }
+                val prevPeaks = remember(parsed) {
+                    parsed.indices.map { i ->
+                        parsed.take(i).mapNotNull { it?.peak }.lastOrNull()
+                    }
                 }
 
                 FlowRow(
@@ -974,7 +1018,7 @@ fun buildWorkoutReport(
 ): String {
     val report = StringBuilder()
     report.append("ОТЧЁТ ПО ТРЕНИРОВКАМ\n")
-    report.append("====================\n")
+    report.append("====================\nВес упражнений указан на 1 руку. Например жим гантелей 30кг х 10 подразумевает, что гантеля в каждой руке 30 кг, 60 в обеих. То же касается и тренажеров с возможностью нагрузки одной руки. Пример: Хаммер 30 кг подразумевает, что вес 30 кг на одну руку, 60 сумарно.\n")
 
     days.forEach { day ->
         report.append("\n").append(day.uppercase()).append("\n")
@@ -1596,6 +1640,8 @@ fun FactsDialog(
         exercise.facts.lastOrNull()?.let { FactParser.parse(it) }
     }
 
+    var factToDeleteIndex by rememberSaveable { mutableStateOf<Int?>(null) }
+
     var noWeight by rememberSaveable(exercise.name, setCount) {
         mutableStateOf(lastParsed?.sets?.all { it.weight == null } == true)
     }
@@ -1700,7 +1746,7 @@ fun FactsDialog(
                                         )
                                     }
                                 }
-                                IconButton(onClick = { onDeleteFact(index) }) {
+                                IconButton(onClick = { factToDeleteIndex = index }) {
                                     Icon(
                                         imageVector = Icons.Outlined.Delete,
                                         contentDescription = "Удалить запись",
@@ -1865,5 +1911,31 @@ fun FactsDialog(
             }
         }
     )
+
+    factToDeleteIndex?.let { idx ->
+        val factStr = exercise.facts.getOrNull(idx) ?: ""
+        AlertDialog(
+            onDismissRequest = { factToDeleteIndex = null },
+            title = { Text("Удалить запись?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Вы уверены, что хотите удалить запись Ф${idx + 1}: \"$factStr\"?")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDeleteFact(idx)
+                        factToDeleteIndex = null
+                    }
+                ) {
+                    Text("Удалить", color = Color(0xFFEF5350), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { factToDeleteIndex = null }) {
+                    Text("Отмена")
+                }
+            }
+        )
+    }
 }
 
