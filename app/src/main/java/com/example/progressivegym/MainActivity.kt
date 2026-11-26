@@ -27,7 +27,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -45,12 +49,14 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -127,13 +133,30 @@ class MainActivity : ComponentActivity() {
 fun WorkoutAppTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = darkColorScheme(
-            primary = Color(0xFF00E5FF),
-            onPrimary = Color.Black,
-            background = Color(0xFF121212),
-            surface = Color(0xFF1E1E1E),
-            onBackground = Color.White,
-            onSurface = Color.White,
-            onSurfaceVariant = Color(0xFFB0B0B0)
+            primary = Color(0xFF80D8FF),
+            onPrimary = Color(0xFF00363A),
+            primaryContainer = Color(0xFF004F58),
+            onPrimaryContainer = Color(0xFFB3EBFF),
+            secondary = Color(0xFFB388FF),
+            onSecondary = Color(0xFF280057),
+            secondaryContainer = Color(0xFF3F007D),
+            onSecondaryContainer = Color(0xFFEADBFF),
+            tertiary = Color(0xFFFFB74D),
+            onTertiary = Color(0xFF452B00),
+            tertiaryContainer = Color(0xFF633F00),
+            onTertiaryContainer = Color(0xFFFFDDB3),
+            background = Color(0xFF121316),
+            onBackground = Color(0xFFE2E2E6),
+            surface = Color(0xFF121316),
+            onSurface = Color(0xFFE2E2E6),
+            surfaceContainerLow = Color(0xFF1A1C1F),
+            surfaceContainer = Color(0xFF212328),
+            surfaceContainerHigh = Color(0xFF2B2D33),
+            surfaceContainerHighest = Color(0xFF363840),
+            surfaceVariant = Color(0xFF2A2D35),
+            onSurfaceVariant = Color(0xFFC4C6CF),
+            outline = Color(0xFF8E9099),
+            outlineVariant = Color(0xFF44474E)
         ),
         content = content
     )
@@ -555,22 +578,25 @@ fun MainScreen(viewModel: WorkoutViewModel) {
             TopAppBar(
                 title = {
                     Text(
-                        text = "Training app",
-                        fontWeight = FontWeight.Bold
+                        text = "Training App",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp
                     )
                 },
                 actions = {
-                    TextButton(onClick = { showReportDialog = true }) {
+                    FilledTonalButton(
+                        onClick = { showReportDialog = true },
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
                         Text(
                             text = "Отчёт",
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF00E5FF)
+                            fontSize = 13.sp
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF1E1E1E),
-                    titleContentColor = Color.White
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
                 )
             )
         }
@@ -580,10 +606,10 @@ fun MainScreen(viewModel: WorkoutViewModel) {
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            TabRow(
+            PrimaryTabRow(
                 selectedTabIndex = pagerState.currentPage,
-                containerColor = Color(0xFF1E1E1E),
-                contentColor = Color.White
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                contentColor = MaterialTheme.colorScheme.primary
             ) {
                 tabs.forEachIndexed { index, title ->
                     Tab(
@@ -595,7 +621,7 @@ fun MainScreen(viewModel: WorkoutViewModel) {
                         },
                         text = {
                             Text(
-                                title,
+                                text = title,
                                 fontWeight = if (pagerState.currentPage == index) FontWeight.Bold else FontWeight.Normal
                             )
                         }
@@ -605,6 +631,7 @@ fun MainScreen(viewModel: WorkoutViewModel) {
 
             HorizontalPager(
                 state = pagerState,
+                beyondViewportPageCount = 1,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
@@ -847,6 +874,12 @@ fun WorkoutTab(viewModel: WorkoutViewModel) {
     }
 }
 
+data class FactChipModel(
+    val label: String,
+    val bgColor: Color,
+    val textColor: Color
+)
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ExerciseCard(
@@ -860,13 +893,52 @@ fun ExerciseCard(
     onDelete: () -> Unit,
     onOpenFacts: () -> Unit
 ) {
+    val facts = exercise.facts
+    val chipModels = remember(facts) {
+        if (facts.isEmpty()) emptyList()
+        else {
+            val parsed = facts.map { FactParser.parse(it) }
+            val maxScore = parsed.mapNotNull { it?.peak }.maxOrNull() ?: 0f
+            val prevPeaks = parsed.indices.map { i ->
+                parsed.take(i).mapNotNull { it?.peak }.lastOrNull()
+            }
+            facts.mapIndexed { fIdx, fVal ->
+                val score = parsed[fIdx]?.peak
+                val prevScore = prevPeaks[fIdx]
+                val changePct =
+                    if (score != null && prevScore != null && prevScore > 0f)
+                        (score - prevScore) / prevScore * 100f
+                    else null
+
+                val (chipBg, textColor) = when {
+                    score == null -> Color(0xFF2E3036) to Color.LightGray
+                    changePct == null -> Color(0xFF1E3A4A) to Color(0xFF80D8FF)
+                    changePct > 1f -> (if (score >= maxScore) Color(0xFF1B4D2E) else Color(0xFF143B22)) to Color(0xFFA2E8DD)
+                    changePct < -1f -> Color(0xFF521515) to Color(0xFFFF8A80)
+                    else -> Color(0xFF4A3800) to Color(0xFFFFD54F)
+                }
+                val arrow = when {
+                    changePct == null -> ""
+                    changePct > 1f -> "  ▲${changePct.roundToInt()}%"
+                    changePct < -1f -> "  ▼${abs(changePct).roundToInt()}%"
+                    else -> "  ＝"
+                }
+                FactChipModel("Ф${fIdx + 1}: $fVal$arrow", chipBg, textColor)
+            }
+        }
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onOpenFacts() },
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E))
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(14.dp)) {
             // Header Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -877,18 +949,28 @@ fun ExerciseCard(
                     modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "$number.",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF00E5FF)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "$number",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
                         text = exercise.name.ifBlank { "Упражнение" },
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -896,107 +978,88 @@ fun ExerciseCard(
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowUp,
                             contentDescription = "Переместить выше",
-                            tint = if (canMoveUp) Color.LightGray else Color(0xFF555555)
+                            tint = if (canMoveUp) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF444444)
                         )
                     }
                     IconButton(onClick = onMoveDown, enabled = canMoveDown) {
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowDown,
                             contentDescription = "Переместить ниже",
-                            tint = if (canMoveDown) Color.LightGray else Color(0xFF555555)
+                            tint = if (canMoveDown) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF444444)
                         )
                     }
                     IconButton(onClick = onEdit) {
                         Icon(
                             imageVector = Icons.Outlined.Edit,
                             contentDescription = "Редактировать",
-                            tint = Color.LightGray
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     IconButton(onClick = onDelete) {
                         Icon(
                             imageVector = Icons.Outlined.Delete,
                             contentDescription = "Удалить",
-                            tint = Color(0xFFEF5350)
+                            tint = Color(0xFFFF8A80)
                         )
                     }
                 }
             }
 
-            HorizontalDivider(color = Color(0xFF333333))
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Details Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(text = "Подходы: ${exercise.sets}", fontSize = 12.sp, color = Color.LightGray)
-                Text(text = "Отдых: ${exercise.rest}", fontSize = 12.sp, color = Color.LightGray)
-                Text(text = "Стиль: ${exercise.style}", fontSize = 12.sp, color = Color(0xFFFFD54F))
+                Text(
+                    text = "Подходы: ${exercise.sets}",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Отдых: ${exercise.rest}",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Стиль: ${exercise.style}",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "Факты (🟢 Рост/Рекорд  🟡 Равно  🔴 Спад):",
-                fontSize = 10.sp,
-                color = Color.Gray
-            )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Fact Chips Row
-            val facts = exercise.facts
             if (facts.isEmpty()) {
                 Text(
                     text = "Нет фактов (нажмите для добавления)",
                     fontSize = 11.sp,
                     fontStyle = FontStyle.Italic,
-                    color = Color.DarkGray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
             } else {
-                val parsed = remember(facts) { facts.map { FactParser.parse(it) } }
-                val maxScore = remember(parsed) { parsed.mapNotNull { it?.peak }.maxOrNull() ?: 0f }
-                val prevPeaks = remember(parsed) {
-                    parsed.indices.map { i ->
-                        parsed.take(i).mapNotNull { it?.peak }.lastOrNull()
-                    }
-                }
-
                 FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    facts.forEachIndexed { fIdx, fVal ->
-                        val score = parsed[fIdx]?.peak
-                        val prevScore = prevPeaks[fIdx]
-                        val changePct =
-                            if (score != null && prevScore != null && prevScore > 0f)
-                                (score - prevScore) / prevScore * 100f
-                            else null
-
-                        val chipBgColor = when {
-                            score == null -> Color(0xFF424242)
-                            changePct == null -> Color(0xFF37474F)
-                            changePct > 1f -> if (score >= maxScore) Color(0xFF2E7D32) else Color(0xFF1B5E20)
-                            changePct < -1f -> Color(0xFFB71C1C)
-                            else -> Color(0xFFE65100)
-                        }
-                        val arrow = when {
-                            changePct == null -> ""
-                            changePct > 1f -> "  ▲${changePct.roundToInt()}%"
-                            changePct < -1f -> "  ▼${abs(changePct).roundToInt()}%"
-                            else -> "  ＝"
-                        }
-
+                    chipModels.forEach { model ->
                         Box(
                             modifier = Modifier
-                                .background(chipBgColor, shape = RoundedCornerShape(4.dp))
-                                .padding(horizontal = 6.dp, vertical = 4.dp)
+                                .background(model.bgColor, shape = RoundedCornerShape(6.dp))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = "Ф${fIdx + 1}: $fVal$arrow",
+                                text = model.label,
                                 fontSize = 11.sp,
-                                color = Color.White
+                                fontWeight = FontWeight.Medium,
+                                color = model.textColor
                             )
                         }
                     }
@@ -1559,7 +1622,9 @@ fun ExerciseDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initialExercise != null) "Редактировать упражнение" else "Добавить упражнение") },
+        shape = RoundedCornerShape(28.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        title = { Text(if (initialExercise != null) "Редактировать упражнение" else "Добавить упражнение", fontWeight = FontWeight.Bold) },
         text = {
             Column(
                 modifier = Modifier
@@ -1571,6 +1636,7 @@ fun ExerciseDialog(
                     onValueChange = { name = it },
                     label = { Text("Название упражнения") },
                     singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1580,6 +1646,7 @@ fun ExerciseDialog(
                         onValueChange = { v -> setsCount = v.filter { it.isDigit() }.take(2) },
                         label = { Text("Подходов") },
                         singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.weight(1f)
                     )
@@ -1589,6 +1656,7 @@ fun ExerciseDialog(
                         onValueChange = { reps = it },
                         label = { Text("Повторы (6-10, MAX)") },
                         singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.weight(1.6f)
                     )
                 }
@@ -1598,6 +1666,7 @@ fun ExerciseDialog(
                     onValueChange = { rest = it },
                     label = { Text("Отдых (напр. 60-90s)") },
                     singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1606,6 +1675,7 @@ fun ExerciseDialog(
                     onValueChange = { style = it },
                     label = { Text("Стиль (напр. ПРОГРЕССИЯ)") },
                     singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -1617,7 +1687,7 @@ fun ExerciseDialog(
                     onDismiss()
                 }
             ) {
-                Text("Сохранить")
+                Text("Сохранить", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
@@ -1708,7 +1778,9 @@ fun FactsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(text = "Факты: ${exercise.name}") },
+        shape = RoundedCornerShape(28.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        title = { Text(text = "Факты: ${exercise.name}", fontWeight = FontWeight.Bold) },
         text = {
             Column(
                 modifier = Modifier
@@ -1737,12 +1809,12 @@ fun FactsDialog(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(text = "Ф${index + 1}: $fact", fontSize = 13.sp)
+                                    Text(text = "Ф${index + 1}: $fact", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                                     if (parsed != null) {
                                         Text(
                                             text = "пик ${formatNum(parsed.peak)} · объём ${formatNum(parsed.volume)}",
                                             fontSize = 10.sp,
-                                            color = Color.Gray
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
@@ -1750,7 +1822,7 @@ fun FactsDialog(
                                     Icon(
                                         imageVector = Icons.Outlined.Delete,
                                         contentDescription = "Удалить запись",
-                                        tint = Color(0xFFEF5350)
+                                        tint = Color(0xFFFF8A80)
                                     )
                                 }
                             }
@@ -1758,7 +1830,10 @@ fun FactsDialog(
                     }
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                    modifier = Modifier.padding(vertical = 10.dp)
+                )
 
                 Text(
                     text = "Новая тренировка: $setCount подх. (${exercise.sets})",
@@ -1783,7 +1858,7 @@ fun FactsDialog(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 6.dp)
+                            .padding(top = 8.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -1794,14 +1869,14 @@ fun FactsDialog(
                                 text = "Подход ${i + 1}",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp,
-                                color = Color.Gray
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             if (!prevRecord.isNullOrBlank()) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(Color(0xFF2C2C2C))
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
                                         .clickable {
                                             val parsedSet = FactParser.parseSet(prevRecord)
                                             if (parsedSet != null) {
@@ -1811,18 +1886,18 @@ fun FactsDialog(
                                                 repsList[i] = formatNum(parsedSet.value)
                                             }
                                         }
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        .padding(horizontal = 8.dp, vertical = 3.dp)
                                 ) {
                                     Text(
                                         text = "пред: ",
                                         fontSize = 11.sp,
-                                        color = Color.Gray
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(
                                         text = prevRecord,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF81C784)
+                                        color = MaterialTheme.colorScheme.primary
                                     )
                                 }
                             }
@@ -1831,7 +1906,7 @@ fun FactsDialog(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 2.dp),
+                                .padding(top = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             if (!noWeight) {
@@ -1840,6 +1915,7 @@ fun FactsDialog(
                                     onValueChange = { weights[i] = it },
                                     label = { Text("кг") },
                                     singleLine = true,
+                                    shape = RoundedCornerShape(12.dp),
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     modifier = Modifier.weight(1f)
                                 )
@@ -1850,6 +1926,7 @@ fun FactsDialog(
                                 onValueChange = { repsList[i] = it },
                                 label = { Text(if (noWeight) "сек / повт." else "повторы") },
                                 singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = if (noWeight) KeyboardType.Decimal else KeyboardType.Number
                                 ),
@@ -1858,15 +1935,14 @@ fun FactsDialog(
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = if (preview != null)
                         "Заполнено $filled из $setCount · пик ${formatNum(preview.peak)} · объём ${formatNum(preview.volume)}"
                     else
                         "Заполнено $filled из $setCount · необходимо заполнить все подходы",
                     fontSize = 11.sp,
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 if (lastParsed != null || setRecords.any { !it.isNullOrBlank() }) {
@@ -1897,11 +1973,12 @@ fun FactsDialog(
                         }
                     },
                     enabled = allSetsCompleted && factText.isNotBlank(),
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(imageVector = Icons.Default.Add, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Добавить запись")
+                    Text("Добавить запись", fontWeight = FontWeight.Bold)
                 }
             }
         },
@@ -1916,6 +1993,8 @@ fun FactsDialog(
         val factStr = exercise.facts.getOrNull(idx) ?: ""
         AlertDialog(
             onDismissRequest = { factToDeleteIndex = null },
+            shape = RoundedCornerShape(28.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             title = { Text("Удалить запись?", fontWeight = FontWeight.Bold) },
             text = {
                 Text("Вы уверены, что хотите удалить запись Ф${idx + 1}: \"$factStr\"?")
@@ -1927,7 +2006,7 @@ fun FactsDialog(
                         factToDeleteIndex = null
                     }
                 ) {
-                    Text("Удалить", color = Color(0xFFEF5350), fontWeight = FontWeight.Bold)
+                    Text("Удалить", color = Color(0xFFFF8A80), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
